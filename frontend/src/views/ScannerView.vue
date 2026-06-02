@@ -1,11 +1,52 @@
 <template>
   <section>
     <h1>Escáner de pie</h1>
-    <p>Sube una foto de tu pie o introduce su URL para calcular tu talla recomendada con IA.</p>
+    <p>Sube una foto de tu pie e introduce tus datos para estimar tu talla recomendada con precisión IA.</p>
     
+    <!-- Guía visual para calibración -->
+    <div class="calibration-guide">
+      <div class="guide-header">
+        <svg style="width:22px;height:22px;color:#7094ff" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+        <h3>¿Cómo obtener una exactitud superior al 90%?</h3>
+      </div>
+      <ul class="guide-list">
+        <li>
+          <span class="step-num">1</span>
+          <span><strong>Tarjeta de Calibración:</strong> Coloca una tarjeta de crédito o plástico estándar en el piso, al lado de tu pie.</span>
+        </li>
+        <li>
+          <span class="step-num">2</span>
+          <span><strong>Ángulo Recto (90°):</strong> Toma la foto directamente desde arriba enfocando tanto el pie como la tarjeta.</span>
+        </li>
+        <li>
+          <span class="step-num">3</span>
+          <span><strong>Buen Contraste:</strong> Asegúrate de estar descalzo y que el fondo sea de un color diferente a tu piel.</span>
+        </li>
+      </ul>
+    </div>
+
     <div class="tabs">
       <button :class="{ active: scanMode === 'file' }" @click="selectMode('file')">Subir archivo</button>
       <button :class="{ active: scanMode === 'url' }" @click="selectMode('url')">Usar URL</button>
+    </div>
+
+    <!-- Bloque de Datos Físicos Común -->
+    <div class="physical-data-card">
+      <h3>Datos Antropométricos (Recomendado para calibrar la IA)</h3>
+      <div class="physical-inputs">
+        <label class="inline-label">
+          Estatura (cm)
+          <input v-model.number="heightCm" type="number" min="50" max="250" placeholder="Ej: 175" />
+        </label>
+        <label class="inline-label">
+          Peso (kg)
+          <input v-model.number="weightKg" type="number" min="10" max="300" placeholder="Ej: 72" />
+        </label>
+        <label class="inline-label checkbox-label">
+          <input v-model="wearingSocks" type="checkbox" />
+          <span>Llevo calcetines / medias</span>
+        </label>
+      </div>
     </div>
 
     <!-- Modo subir archivo (Por defecto y recomendado) -->
@@ -81,6 +122,10 @@ import { useUserStore } from "../stores/userStore";
 
 const scanMode = ref("file");
 const imageUrl = ref("");
+const heightCm = ref(null);
+const weightKg = ref(null);
+const wearingSocks = ref(false);
+
 const uploadFile = ref(null);
 const previewUrl = ref("");
 const isDragging = ref(false);
@@ -129,6 +174,9 @@ async function submitFile() {
 
   const formData = new FormData();
   formData.append("file", uploadFile.value);
+  if (heightCm.value) formData.append("height_cm", heightCm.value);
+  if (weightKg.value) formData.append("weight_kg", weightKg.value);
+  formData.append("wearing_socks", wearingSocks.value);
 
   try {
     const response = await fetch("/api/measure/upload", {
@@ -153,11 +201,19 @@ async function submitImage() {
   result.value = null;
   isAnalyzing.value = true;
 
+  const payload = { 
+    image_url: imageUrl.value, 
+    user_id: "anonymous" 
+  };
+  if (heightCm.value) payload.height_cm = heightCm.value;
+  if (weightKg.value) payload.weight_kg = weightKg.value;
+  payload.wearing_socks = wearingSocks.value;
+
   try {
     const response = await fetch("/api/measure/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_url: imageUrl.value, user_id: "anonymous" }),
+      body: JSON.stringify(payload),
     });
     if (!response.ok) {
       throw new Error("Error al procesar la imagen");
@@ -179,6 +235,54 @@ section {
   margin: 0 auto;
   padding: 1rem 0;
   animation: fadeInUp 0.95s ease both;
+}
+.calibration-guide {
+  margin-top: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(45, 90, 255, 0.08);
+  border: 1px solid rgba(45, 90, 255, 0.2);
+  border-radius: 24px;
+}
+.guide-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.guide-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #e8f0ff;
+  font-weight: 700;
+}
+.guide-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.guide-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  font-size: 0.88rem;
+  color: #cdd8ff;
+  line-height: 1.45;
+}
+.step-num {
+  background: #3567ff;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: bold;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
 }
 h1 {
   font-size: clamp(2rem, 3vw, 2.8rem);
@@ -216,6 +320,36 @@ p {
   color: #fff;
   background: rgba(78, 152, 255, 0.16);
   border: 1px solid rgba(78, 152, 255, 0.3);
+}
+.physical-data-card {
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(16, 23, 45, 0.5);
+  border: 1px solid rgba(123, 145, 255, 0.14);
+  border-radius: 20px;
+}
+.physical-data-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 0.95rem;
+  color: #d1dcff;
+}
+.physical-inputs {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.inline-label {
+  flex: 1;
+  min-width: 140px;
+  display: grid;
+  gap: 0.5rem;
+  color: #a4b3e6;
+  font-size: 0.85rem;
+}
+.inline-label input {
+  min-height: 2.8rem;
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
 }
 .upload-container {
   display: flex;
@@ -385,6 +519,26 @@ button[type="submit"]:hover {
 .error {
   margin-top: 1rem;
   color: #ff6d85;
+}
+.checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.checkbox-label input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  min-height: auto;
+  cursor: pointer;
+  margin: 0;
+}
+.checkbox-label span {
+  font-size: 0.9rem;
+  color: #d1dcff;
+  font-weight: 500;
 }
 @keyframes fadeInUp {
   from {
